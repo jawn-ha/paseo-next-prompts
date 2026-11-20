@@ -4,20 +4,22 @@ import os from "node:os";
 import path from "node:path";
 import type { RpcInput } from "@getpaseo/plugin";
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import type {
-  NextPromptItem,
-  NextPromptsConfigPublic,
-  NextPromptsDisplayMode,
-  NextPromptsEngine,
-  NextPromptsLanguage,
-  NextPromptsMode,
-  NextPromptsTimelineData,
-  saveNextPromptsConfigRpc,
+import {
+  COMPOSER_METADATA_KEY,
+  type NextPromptItem,
+  type NextPromptsConfigPublic,
+  type NextPromptsDisplayMode,
+  type NextPromptsEngine,
+  type NextPromptsLanguage,
+  type NextPromptsMode,
+  type NextPromptsTimelineData,
+  SESSION_DISABLED_METADATA_KEY,
+  type saveNextPromptsConfigRpc,
 } from "../shared/contracts";
 
 type PaseoServerApi = PluginHandlerContext["paseo"];
 
-export const COMPOSER_METADATA_KEY = "paseo-next-prompts";
+export { COMPOSER_METADATA_KEY, SESSION_DISABLED_METADATA_KEY };
 export const HELPER_METADATA_KEY = "paseo-next-prompts-helper";
 
 const generationSeqByAgent = new Map<string, number>();
@@ -34,6 +36,29 @@ export function invalidateAgentGeneration(agentId: string): void {
 
 export function isHelperAgent(agent: { metadata?: Record<string, unknown> | null }): boolean {
   return Boolean(agent.metadata?.[HELPER_METADATA_KEY]);
+}
+
+export function isSessionDisabled(agent: { metadata?: Record<string, unknown> | null }): boolean {
+  return Boolean(agent.metadata?.[SESSION_DISABLED_METADATA_KEY]);
+}
+
+export async function setSessionAutoSuggestEnabled(
+  paseo: PaseoServerApi,
+  agentId: string,
+  enabled: boolean,
+): Promise<{ ok: boolean; disabled: boolean }> {
+  if (!enabled) {
+    invalidateAgentGeneration(agentId);
+    await paseo.agents.ref(agentId).setMetadata({
+      [SESSION_DISABLED_METADATA_KEY]: true,
+      [COMPOSER_METADATA_KEY]: null,
+    });
+    return { ok: true, disabled: true };
+  }
+  await paseo.agents.ref(agentId).setMetadata({
+    [SESSION_DISABLED_METADATA_KEY]: null,
+  });
+  return { ok: true, disabled: false };
 }
 
 interface StoredConfig {

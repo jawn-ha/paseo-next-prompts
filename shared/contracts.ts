@@ -113,6 +113,21 @@ export const sendNextPromptRpc = defineRpc({
   }),
 });
 
+export const COMPOSER_METADATA_KEY = "paseo-next-prompts";
+export const SESSION_DISABLED_METADATA_KEY = "paseo-next-prompts-disabled";
+
+export const setSessionNextPromptsEnabledRpc = defineRpc({
+  name: "next_prompts.session.set_enabled",
+  input: z.object({
+    agentId: z.string().min(1),
+    enabled: z.boolean(),
+  }),
+  output: z.object({
+    ok: z.boolean(),
+    disabled: z.boolean(),
+  }),
+});
+
 export const optimizePromptRpc = defineRpc({
   name: "next_prompts.optimize",
   input: z.object({

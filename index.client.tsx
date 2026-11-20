@@ -8,12 +8,13 @@ import {
   NextPromptsTimelineRenderer,
 } from "./client/next-prompts-ui";
 import {
+  COMPOSER_METADATA_KEY,
   NextPromptsTimelineSchema,
+  SESSION_DISABLED_METADATA_KEY,
   generateNextPromptsRpc,
   optimizePromptRpc,
+  setSessionNextPromptsEnabledRpc,
 } from "./shared/contracts";
-
-const COMPOSER_METADATA_KEY = "paseo-next-prompts";
 
 export default function contribute(client: PluginClientContext) {
   const pillByAgent = new Map<string, PluginButtonRegistration>();
@@ -57,6 +58,11 @@ export default function contribute(client: PluginClientContext) {
         },
       });
       pillByAgent.set(agentId, reg);
+    }
+
+    if (Boolean(agent.metadata?.[SESSION_DISABLED_METADATA_KEY])) {
+      lastAutoPrefilledByAgent.delete(agentId);
+      return;
     }
 
     const rawMeta = agent.metadata?.[COMPOSER_METADATA_KEY];
@@ -143,6 +149,22 @@ export default function contribute(client: PluginClientContext) {
       context: "global",
       onSelect({ openSettings }) {
         openSettings("next-prompts");
+      },
+    }),
+
+    client.addCommandCenterItem({
+      id: "toggle-next-prompts-session",
+      title: "Next Prompts: Toggle Auto-Suggest for Current Session",
+      icon: "Sparkles",
+      context: "agent",
+      async onSelect({ agent, rpc }) {
+        const disabled = Boolean(
+          (agent.metadata as Record<string, unknown> | null | undefined)?.[SESSION_DISABLED_METADATA_KEY],
+        );
+        await rpc(setSessionNextPromptsEnabledRpc, {
+          agentId: agent.id,
+          enabled: disabled,
+        });
       },
     }),
 

@@ -4,8 +4,10 @@ import {
   generateAndAppendNextPrompts,
   getPublicConfig,
   isHelperAgent,
+  isSessionDisabled,
   optimizeUserPrompt,
   savePublicConfig,
+  setSessionAutoSuggestEnabled,
   shouldSkipBackground,
   testLlmConnection,
 } from "./server/suggester";
@@ -15,6 +17,7 @@ import {
   optimizePromptRpc,
   saveNextPromptsConfigRpc,
   sendNextPromptRpc,
+  setSessionNextPromptsEnabledRpc,
   testNextPromptsLlmRpc,
 } from "./shared/contracts";
 
@@ -23,12 +26,14 @@ export default function contribute(server: PluginServerContext) {
 
   const removeBeforeHook = server.addHook("agent.turn.before", async ({ agent }, { paseo }) => {
     if (isHelperAgent(agent)) return;
+    if (isSessionDisabled(agent)) return;
     if (agent.background && shouldSkipBackground()) return;
     await clearComposerSuggestions(paseo, agent.id);
   });
 
   const removeAfterHook = server.addHook("agent.turn.after", async ({ agent, turnId, outcome }, { paseo }) => {
     if (isHelperAgent(agent)) return;
+    if (isSessionDisabled(agent)) return;
     if (outcome.kind === "canceled") return;
     if (agent.background && shouldSkipBackground()) return;
     if (!turnId) return;
@@ -74,6 +79,9 @@ export default function contribute(server: PluginServerContext) {
     await paseo.agents.ref(input.agentId).send(input.prompt);
     return { ok: true };
   });
+  server.handle(setSessionNextPromptsEnabledRpc, (input, { paseo }) =>
+    setSessionAutoSuggestEnabled(paseo, input.agentId, input.enabled),
+  );
   server.handle(optimizePromptRpc, (input, { paseo }) =>
     optimizeUserPrompt({
       paseo,

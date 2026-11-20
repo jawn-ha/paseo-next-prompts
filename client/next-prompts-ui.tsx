@@ -9,20 +9,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
+  COMPOSER_METADATA_KEY,
   type NextPromptsDisplayMode,
   type NextPromptsLanguage,
   type NextPromptsMode,
   type NextPromptsTimelineData,
   NextPromptsTimelineSchema,
+  SESSION_DISABLED_METADATA_KEY,
   generateNextPromptsRpc,
   getNextPromptsConfigRpc,
   optimizePromptRpc,
   saveNextPromptsConfigRpc,
   sendNextPromptRpc,
+  setSessionNextPromptsEnabledRpc,
   testNextPromptsLlmRpc,
 } from "../shared/contracts";
-
-const COMPOSER_METADATA_KEY = "paseo-next-prompts";
 
 const LLM_PRESETS = [
   { label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
@@ -55,15 +56,21 @@ function NextPromptsPopoverBody({
   const sendPrompt = useRpc(sendNextPromptRpc);
   const regenerate = useRpc(generateNextPromptsRpc);
   const optimizePrompt = useRpc(optimizePromptRpc);
+  const setSessionEnabled = useRpc(setSessionNextPromptsEnabledRpc);
   const composers = useComposers({ agentId });
 
   const [previousDraft, setPreviousDraft] = useState<string | null>(null);
 
-  const agentData = useAgent(agentId, (a) => ({
-    cwd: a.cwd,
-    provider: a.provider,
-    meta: (a.metadata as Record<string, unknown> | undefined)?.[COMPOSER_METADATA_KEY],
-  }));
+  const agentData = useAgent(agentId, (a) => {
+    const metadata = a.metadata as Record<string, unknown> | undefined;
+    return {
+      cwd: a.cwd,
+      provider: a.provider,
+      meta: metadata?.[COMPOSER_METADATA_KEY],
+      sessionDisabled: Boolean(metadata?.[SESSION_DISABLED_METADATA_KEY]),
+    };
+  });
+  const sessionDisabled = Boolean(agentData?.sessionDisabled);
   const rawMeta = agentData?.meta;
   const parsed = rawMeta && typeof rawMeta === "object"
     ? NextPromptsTimelineSchema.safeParse(rawMeta)
@@ -138,6 +145,24 @@ function NextPromptsPopoverBody({
       }),
     onSuccess(res) {
       if (!res.ok && res.error) toast.error(res.error);
+    },
+    onError(err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const toggleSessionMutation = useMutation({
+    mutationFn: (nextEnabled: boolean) => setSessionEnabled({ agentId, enabled: nextEnabled }),
+    onSuccess(res) {
+      if (res.disabled) {
+        const composer = composers[0];
+        if (composer && suggestions.some((s) => s.prompt.trim() === composer.prompt.trim())) {
+          composer.setPrompt("");
+        }
+        toast.show("已关闭当前会话的自动推荐（仅影响本会话）", { variant: "success" });
+      } else {
+        toast.show("已开启当前会话的自动推荐", { variant: "success" });
+      }
     },
     onError(err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -227,6 +252,48 @@ function NextPromptsPopoverBody({
         </View>
       </View>
 
+      {/* Per-session auto-suggest toggle */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 9,
+          paddingVertical: 6,
+          borderRadius: 8,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface1,
+          gap: 8,
+        }}
+      >
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, flex: 1 }}>
+          {sessionDisabled ? "当前会话自动推荐：已关闭" : "当前会话自动推荐：已开启"}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={toggleSessionMutation.isPending}
+          onPress={() => toggleSessionMutation.mutate(sessionDisabled)}
+          style={{
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            borderRadius: 6,
+            borderWidth: 1,
+            borderColor: sessionDisabled ? theme.colors.accent : theme.colors.border,
+            backgroundColor: sessionDisabled ? theme.colors.surface2 : theme.colors.surface0,
+            opacity: toggleSessionMutation.isPending ? 0.5 : 1,
+          }}
+        >
+          <Text style={{ color: theme.colors.foreground, fontSize: 11, fontWeight: "600" }}>
+            {toggleSessionMutation.isPending
+              ? "..."
+              : sessionDisabled
+                ? "开启本会话"
+                : "关闭本会话"}
+          </Text>
+        </Pressable>
+      </View>
+
       {/* One-Click Optimize Current Draft */}
       <View style={{ flexDirection: "row", gap: 6 }}>
         <Pressable
@@ -283,7 +350,9 @@ function NextPromptsPopoverBody({
 
       {suggestions.length === 0 ? (
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-          No suggestions yet. Run a turn or click ↻ to generate.
+          {sessionDisabled
+            ? "当前会话已关闭自动推荐（仅影响本会话，仍可手动点 ↻ 或使用优化功能）。"
+            : "No suggestions yet. Run a turn or click ↻ to generate."}
         </Text>
       ) : (
         <View style={{ gap: 6 }}>

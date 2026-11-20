@@ -12,6 +12,6 @@ When an agent finishes a turn, the plugin inspects the latest user request, assi
 
 ## Controls
 
-- Automatic suggestions after every completed turn (skips background subagents by default).
+- Automatic suggestions after every completed turn (skips background subagents by default), with a per-session ON/OFF toggle right inside the `✨ Next` composer popover (and Command Center).
 - Slash command `/next` to generate suggestions on demand.
 - Settings screen (`Next Prompts`) to switch engines, pick presets, configure model and API key, and test the LLM connection.
