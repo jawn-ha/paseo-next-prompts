@@ -8,6 +8,7 @@ import { Icon, Modal, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { formatCopy, useNextPromptsCopy } from "./i18n";
 import {
   COMPOSER_METADATA_KEY,
   type NextPromptsDisplayMode,
@@ -59,11 +60,18 @@ function NextPromptsPopoverBody({
   close(): void;
 }) {
   const toast = useToast();
+  const getConfig = useRpc(getNextPromptsConfigRpc);
   const sendPrompt = useRpc(sendNextPromptRpc);
   const regenerate = useRpc(generateNextPromptsRpc);
   const optimizePrompt = useRpc(optimizePromptRpc);
   const setSessionEnabled = useRpc(setSessionNextPromptsEnabledRpc);
   const composers = useComposers({ agentId });
+
+  const configQuery = useQuery({
+    queryKey: ["paseo-next-prompts", "config"],
+    queryFn: () => getConfig({}),
+  });
+  const { copy } = useNextPromptsCopy(configQuery.data?.language);
 
   const [previousDraft, setPreviousDraft] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -91,7 +99,7 @@ function NextPromptsPopoverBody({
       const composer = composers[0];
       const draft = composer?.prompt?.trim() ?? "";
       if (!draft) {
-        throw new Error("请先在聊天输入框里输入一点内容再优化");
+        throw new Error(copy.emptyDraftError);
       }
       setPreviousDraft(draft);
       const res = await optimizePrompt({
@@ -101,7 +109,7 @@ function NextPromptsPopoverBody({
         provider: agentData?.provider ?? undefined,
       });
       if (!res.ok) {
-        throw new Error(res.error || "Prompt optimization failed");
+        throw new Error(res.error || copy.optimizeFailed);
       }
       composer.setPrompt(res.optimized);
       try {
@@ -111,7 +119,9 @@ function NextPromptsPopoverBody({
     },
     onSuccess(res) {
       toast.show(
-        res.engine !== "heuristic" ? `已用 ${res.model ?? "AI"} 优化提示词` : "已优化提示词（本地模式）",
+        res.engine !== "heuristic"
+          ? formatCopy(copy.optimizedAiToast, { model: res.model ?? "AI" })
+          : copy.optimizedLocalToast,
         { variant: "success" },
       );
       close();
@@ -166,9 +176,9 @@ function NextPromptsPopoverBody({
         if (composer && suggestions.some((s) => s.prompt.trim() === composer.prompt.trim())) {
           composer.setPrompt("");
         }
-        toast.show("已关闭当前会话的自动推荐（仅影响本会话）", { variant: "success" });
+        toast.show(copy.sessionDisabledToast, { variant: "success" });
       } else {
-        toast.show("已开启当前会话的自动推荐", { variant: "success" });
+        toast.show(copy.sessionEnabledToast, { variant: "success" });
       }
     },
     onError(err) {
@@ -200,7 +210,7 @@ function NextPromptsPopoverBody({
       ? `AI · ${parsed.data.model ?? "LLM"}`
       : parsed.data.engine === "paseo"
         ? `AI · ${parsed.data.model ?? "Paseo"}`
-        : "Local · Context"
+        : copy.engineLocal
     : "";
 
   return (
@@ -226,7 +236,7 @@ function NextPromptsPopoverBody({
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
           <Text style={{ color: theme.colors.foreground, fontWeight: "700", fontSize: 13 }}>
-            ✨ Next Prompts
+            {copy.popoverTitle}
           </Text>
           {engineLabel ? (
             <View
@@ -253,7 +263,7 @@ function NextPromptsPopoverBody({
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Pressable
             accessibilityRole="switch"
-            accessibilityLabel="当前会话自动推荐"
+            accessibilityLabel={copy.sessionToggleLabel}
             accessibilityState={{ checked: !sessionDisabled }}
             disabled={toggleSessionMutation.isPending}
             onPress={() => toggleSessionMutation.mutate(sessionDisabled)}
@@ -265,7 +275,7 @@ function NextPromptsPopoverBody({
             }}
           >
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>
-              {sessionDisabled ? "本会话已关" : "自动推荐"}
+              {sessionDisabled ? copy.sessionAutoOff : copy.sessionAutoOn}
             </Text>
             <View
               style={{
@@ -295,7 +305,7 @@ function NextPromptsPopoverBody({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="打开 Next Prompts 设置"
+            accessibilityLabel={copy.openSettingsLabel}
             onPress={() => setSettingsOpen(true)}
             style={{
               width: 24,
@@ -339,10 +349,10 @@ function NextPromptsPopoverBody({
             }}
           >
             {optimizeMutation.isPending
-              ? "✨ 优化中..."
+              ? copy.optimizing
               : currentDraft
-                ? "✨ 一键优化当前输入"
-                : "输入内容后可一键优化 Prompt"}
+                ? copy.optimizeDraft
+                : copy.optimizePlaceholder}
           </Text>
         </Pressable>
 
@@ -361,7 +371,7 @@ function NextPromptsPopoverBody({
             }}
           >
             <Text style={{ color: theme.colors.foreground, fontSize: 11.5, fontWeight: "600" }}>
-              ↩ 撤销
+              {copy.undo}
             </Text>
           </Pressable>
         ) : null}
@@ -380,7 +390,7 @@ function NextPromptsPopoverBody({
               justifyContent: "center",
             }}
           >
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5 }}>清空</Text>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5 }}>{copy.clear}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -395,7 +405,7 @@ function NextPromptsPopoverBody({
           }}
         >
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
-            推荐追问
+            {copy.suggestionsHeading}
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -409,7 +419,7 @@ function NextPromptsPopoverBody({
             }}
           >
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "500" }}>
-              {regenMutation.isPending ? "生成中..." : "↻ 换一批"}
+              {regenMutation.isPending ? copy.refreshing : copy.refresh}
             </Text>
           </Pressable>
         </View>
@@ -434,9 +444,7 @@ function NextPromptsPopoverBody({
                 lineHeight: 17,
               }}
             >
-              {sessionDisabled
-                ? "当前会话已关闭自动推荐（不影响其他会话）\n仍可随时点右上角「↻ 换一批」手动生成"
-                : "暂无建议，完成一轮对话或点右上角「↻ 换一批」生成"}
+              {sessionDisabled ? copy.emptyPaused : copy.emptyDefault}
             </Text>
           </View>
         ) : (
@@ -511,7 +519,7 @@ function NextPromptsPopoverBody({
       </View>
       {settingsOpen ? (
         <Modal
-          title="Next Prompts Settings"
+          title={copy.settingsModalTitle}
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
         >
@@ -533,10 +541,16 @@ export function NextPromptsTimelineRenderer({
   theme,
 }: PluginTimelineItemProps<NextPromptsTimelineData>) {
   const toast = useToast();
+  const getConfig = useRpc(getNextPromptsConfigRpc);
   const sendPrompt = useRpc(sendNextPromptRpc);
   const regenerate = useRpc(generateNextPromptsRpc);
   const composers = useComposers({ agentId });
   const agentInfo = useAgent(agentId, (a) => ({ cwd: a.cwd, provider: a.provider }));
+  const configQuery = useQuery({
+    queryKey: ["paseo-next-prompts", "config"],
+    queryFn: () => getConfig({}),
+  });
+  const { copy } = useNextPromptsCopy(configQuery.data?.language);
 
   const [sentId, setSentId] = useState<string | null>(null);
 
@@ -587,7 +601,7 @@ export function NextPromptsTimelineRenderer({
       ? `AI · ${data.model ?? "LLM"}`
       : data.engine === "paseo"
         ? `AI · ${data.model ?? "Paseo"}`
-        : "Local · Context";
+        : copy.engineLocal;
 
   return (
     <View
@@ -604,7 +618,7 @@ export function NextPromptsTimelineRenderer({
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Text style={{ color: theme.colors.foreground, fontWeight: "700", fontSize: 12 }}>
-            ✨ Next Prompts
+            {copy.timelineTitle}
           </Text>
           <View
             style={{
@@ -737,6 +751,8 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [skipBackgroundAgents, setSkipBackgroundAgents] = useState(true);
 
+  const { copy } = useNextPromptsCopy(language);
+
   useEffect(() => {
     const d = configQuery.data;
     if (!d) return;
@@ -769,7 +785,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
     onSuccess() {
       setApiKeyInput("");
       void queryClient.invalidateQueries({ queryKey: ["paseo-next-prompts"] });
-      toast.show("Saved Next Prompts settings", { variant: "success" });
+      toast.show(copy.savedToast, { variant: "success" });
     },
     onError(err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -781,11 +797,15 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
     onSuccess(res) {
       if (res.ok) {
         toast.show(
-          `LLM OK (${res.model}) — generated ${res.sampleCount} suggestions in ${res.latencyMs}ms`,
+          formatCopy(copy.testOkToast, {
+            model: res.model,
+            count: res.sampleCount ?? 0,
+            ms: res.latencyMs,
+          }),
           { variant: "success" },
         );
       } else {
-        toast.error(`LLM Test Failed: ${res.error}`);
+        toast.error(formatCopy(copy.testFailedToast, { error: res.error ?? "" }));
       }
     },
     onError(err) {
@@ -810,10 +830,10 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
     >
       <View style={{ gap: 4 }}>
         <Text style={{ color: theme.colors.foreground, fontSize: layout.compact ? 20 : 24, fontWeight: "700" }}>
-          ✨ Next Prompts
+          {copy.settingsHeading}
         </Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 13 }}>
-          Automatically suggests clickable follow-up prompts after every agent turn. Supports fast OpenAI-compatible LLMs and an instant zero-config local heuristic engine.
+          {copy.settingsSubtitle}
         </Text>
       </View>
 
@@ -829,13 +849,13 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
         }}
       >
         <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 14 }}>
-          General Behavior
+          {copy.generalBehavior}
         </Text>
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <Pressable accessibilityRole="button" onPress={() => setEnabled((v) => !v)} style={chipStyle(enabled)}>
             <Text style={{ color: theme.colors.foreground, fontSize: 12, fontWeight: "600" }}>
-              {enabled ? "✓ Auto-suggest after turn: ON" : "Auto-suggest after turn: OFF"}
+              {enabled ? copy.autoSuggestOn : copy.autoSuggestOff}
             </Text>
           </Pressable>
 
@@ -845,21 +865,21 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
             style={chipStyle(skipBackgroundAgents)}
           >
             <Text style={{ color: theme.colors.foreground, fontSize: 12, fontWeight: "600" }}>
-              {skipBackgroundAgents ? "✓ Skip background subagents" : "Include background subagents"}
+              {skipBackgroundAgents ? copy.skipBgOn : copy.skipBgOff}
             </Text>
           </Pressable>
         </View>
 
         <View style={{ gap: 6 }}>
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-            Display Position
+            {copy.displayPosition}
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {(
               [
-                { id: "composer", label: "Chat Box (Codex-style)" },
-                { id: "timeline", label: "Timeline Card" },
-                { id: "both", label: "Both" },
+                { id: "composer", label: copy.displayComposer },
+                { id: "timeline", label: copy.displayTimeline },
+                { id: "both", label: copy.displayBoth },
               ] as const
             ).map((opt) => (
               <Pressable
@@ -878,15 +898,15 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
 
         <View style={{ gap: 8 }}>
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-            Generation Mode
+            {copy.generationMode}
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {(
               [
-                { id: "paseo", label: "Background Session (Auto-Archive · Default)" },
-                { id: "llm", label: "Direct LLM API (Base URL / Key)" },
-                { id: "auto", label: "Auto (Direct LLM → Background Session → Local)" },
-                { id: "heuristic", label: "Local Context Only (0ms)" },
+                { id: "paseo", label: copy.modePaseo },
+                { id: "llm", label: copy.modeLlm },
+                { id: "auto", label: copy.modeAuto },
+                { id: "heuristic", label: copy.modeHeuristic },
               ] as const
             ).map((opt) => (
               <Pressable key={opt.id} accessibilityRole="button" onPress={() => setMode(opt.id)} style={chipStyle(mode === opt.id)}>
@@ -911,13 +931,13 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
             }}
           >
             <Text style={{ color: theme.colors.foreground, fontSize: 12, fontWeight: "600" }}>
-              Tip: Background Session vs. Direct LLM API
+              {copy.tipTitle}
             </Text>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 17 }}>
-              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Background Session (Auto-Archive · Default)</Text>: Zero extra API key — reuses your existing Paseo AI provider in a temporary background agent inside the current workspace (no new workspace created) and automatically archives the helper agent when done. Slightly slower (~5–15s) and may still appear in the underlying CLI&apos;s local history.
+              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>{copy.tipPaseoPrefix}</Text>{copy.tipPaseoBody}
             </Text>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 17 }}>
-              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Direct LLM API (Base URL / Key)</Text>: Sends a direct HTTP request to an OpenAI-compatible endpoint (OpenAI / DeepSeek / OpenRouter / local Ollama). Faster (~1–2s) and creates zero background sessions in Paseo or any CLI, but requires configuring a Base URL, Model, and API Key.
+              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>{copy.tipLlmPrefix}</Text>{copy.tipLlmBody}
             </Text>
           </View>
         </View>
@@ -925,7 +945,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
         {mode === "paseo" || mode === "auto" ? (
           <View style={{ gap: 6 }}>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-              Paseo AI Provider (Temporary Background Session · Auto-Archived)
+              {copy.paseoProviderTitle}
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
               {["auto", "codex", "cursor", "claude", "opencode", "copilot"].map((p) => (
@@ -936,7 +956,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
                   style={chipStyle(paseoProvider === p)}
                 >
                   <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>
-                    {p === "auto" ? "Auto (Match Agent)" : p}
+                    {p === "auto" ? copy.paseoProviderAuto : p}
                   </Text>
                 </Pressable>
               ))}
@@ -944,7 +964,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
             <TextInput
               value={paseoProvider}
               onChangeText={setPaseoProvider}
-              placeholder="auto or provider / provider/model"
+              placeholder={copy.paseoProviderPlaceholder}
               style={{
                 paddingHorizontal: 10,
                 paddingVertical: 8,
@@ -962,7 +982,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
           <View style={{ gap: 6 }}>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-              Suggestions per turn
+              {copy.suggestionsPerTurn}
             </Text>
             <View style={{ flexDirection: "row", gap: 6 }}>
               {[2, 3, 4].map((n) => (
@@ -975,14 +995,14 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
 
           <View style={{ gap: 6 }}>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-              Language
+              {copy.languageLabel}
             </Text>
             <View style={{ flexDirection: "row", gap: 6 }}>
               {(
                 [
-                  { id: "auto", label: "Auto" },
-                  { id: "zh", label: "中文" },
-                  { id: "en", label: "English" },
+                  { id: "auto", label: copy.langAuto },
+                  { id: "zh", label: copy.langZh },
+                  { id: "en", label: copy.langEn },
                 ] as const
               ).map((opt) => (
                 <Pressable key={opt.id} accessibilityRole="button" onPress={() => setLanguage(opt.id)} style={chipStyle(language === opt.id)}>
@@ -1007,10 +1027,10 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
           }}
         >
           <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 14 }}>
-            Direct LLM API (OpenAI-Compatible / Ollama)
+            {copy.directLlmTitle}
           </Text>
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-            Calls the HTTP endpoint directly without spawning any Paseo background session (or set OPENAI_API_KEY / PASEO_NEXT_PROMPTS_API_KEY in the daemon env).
+            {copy.directLlmDesc}
           </Text>
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
@@ -1024,13 +1044,15 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
                 }}
                 style={chipStyle(apiBaseUrl === p.baseUrl)}
               >
-                <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>{p.label}</Text>
+                <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>
+                  {p.label === "Ollama (Local)" ? copy.presetOllama : p.label}
+                </Text>
               </Pressable>
             ))}
           </View>
 
           <View style={{ gap: 4 }}>
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>API Base URL</Text>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{copy.apiBaseUrl}</Text>
             <TextInput
               value={apiBaseUrl}
               onChangeText={setApiBaseUrl}
@@ -1049,7 +1071,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
           </View>
 
           <View style={{ gap: 4 }}>
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Model</Text>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{copy.modelLabel}</Text>
             <TextInput
               value={model}
               onChangeText={setModel}
@@ -1069,7 +1091,10 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
 
           <View style={{ gap: 4 }}>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-              API Key {configQuery.data?.hasApiKey ? `(Saved: ${configQuery.data.apiKeyPreview})` : "(Not set)"}
+              {copy.apiKeyLabel}{" "}
+              {configQuery.data?.hasApiKey
+                ? formatCopy(copy.apiKeySaved, { preview: configQuery.data.apiKeyPreview })
+                : copy.apiKeyNotSet}
             </Text>
             <TextInput
               value={apiKeyInput}
@@ -1077,8 +1102,8 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
               secureTextEntry
               placeholder={
                 configQuery.data?.hasApiKey
-                  ? "Enter a new key to replace, or leave blank to keep current"
-                  : "sk-... (optional for local Ollama)"
+                  ? copy.apiKeyPlaceholderReplace
+                  : copy.apiKeyPlaceholderNew
               }
               style={{
                 paddingHorizontal: 10,
@@ -1109,7 +1134,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
               }}
             >
               <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 12 }}>
-                {testMutation.isPending ? "Testing..." : "Test LLM"}
+                {testMutation.isPending ? copy.testing : copy.testLlm}
               </Text>
             </Pressable>
 
@@ -1127,7 +1152,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
                   backgroundColor: theme.colors.surface0,
                 }}
               >
-                <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Clear Key</Text>
+                <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{copy.clearKey}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -1148,7 +1173,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
           }}
         >
           <Text style={{ color: theme.colors.accentForeground, fontWeight: "700", fontSize: 13 }}>
-            {saveMutation.isPending ? "Saving..." : "Save Settings"}
+            {saveMutation.isPending ? copy.saving : copy.saveSettings}
           </Text>
         </Pressable>
       </View>

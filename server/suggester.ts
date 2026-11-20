@@ -273,6 +273,8 @@ async function readGitContext(cwd?: string | null): Promise<{
 
 function detectLanguage(cfgLang: NextPromptsLanguage, userText: string, assistantText: string): "zh" | "en" {
   if (cfgLang === "zh" || cfgLang === "en") return cfgLang;
+  const userCjk = (userText.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  if (userCjk >= 2) return "zh";
   const sample = `${userText}\n${assistantText.slice(0, 800)}`;
   const cjkCount = (sample.match(/[\u4e00-\u9fff]/g) ?? []).length;
   return cjkCount >= 4 ? "zh" : "en";

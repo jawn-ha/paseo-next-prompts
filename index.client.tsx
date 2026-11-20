@@ -2,6 +2,7 @@ import type {
   PluginButtonRegistration,
   PluginClientContext,
 } from "@getpaseo/plugin/client";
+import { nextPromptsTranslations } from "./client/i18n";
 import {
   NextPromptsComposerPopover,
   NextPromptsSettingsScreen,
@@ -48,9 +49,9 @@ export default function contribute(client: PluginClientContext) {
         workspaceId,
         agentId,
         button: {
-          title: "Optimize current prompt or pick next follow-up prompt",
+          title: nextPromptsTranslations.message("pillTitle"),
           icon: "Sparkles",
-          label: "Next",
+          label: nextPromptsTranslations.message("pillLabel"),
           behavior: {
             kind: "popover",
             Content: NextPromptsComposerPopover,
@@ -137,14 +138,14 @@ export default function contribute(client: PluginClientContext) {
 
     client.addSettingsScreen({
       id: "next-prompts",
-      title: "Next Prompts",
+      title: nextPromptsTranslations.message("settingsTitle"),
       icon: "Sparkles",
       Component: NextPromptsSettingsScreen,
     }),
 
     client.addCommandCenterItem({
       id: "open-next-prompts-settings",
-      title: "Next Prompts: Settings",
+      title: nextPromptsTranslations.message("cmdSettings"),
       icon: "Sparkles",
       context: "global",
       onSelect({ openSettings }) {
@@ -154,7 +155,7 @@ export default function contribute(client: PluginClientContext) {
 
     client.addCommandCenterItem({
       id: "toggle-next-prompts-session",
-      title: "Next Prompts: Toggle Auto-Suggest for Current Session",
+      title: nextPromptsTranslations.message("cmdToggleSession"),
       icon: "Sparkles",
       context: "agent",
       async onSelect({ agent, rpc }) {
@@ -170,7 +171,7 @@ export default function contribute(client: PluginClientContext) {
 
     client.addCommandCenterItem({
       id: "optimize-current-prompt",
-      title: "Next Prompts: Optimize Current Input",
+      title: nextPromptsTranslations.message("cmdOptimize"),
       icon: "Sparkles",
       context: "agent",
       async onSelect({ agent, rpc, composers }) {
@@ -194,7 +195,7 @@ export default function contribute(client: PluginClientContext) {
 
     client.addSlashCommand({
       name: "next",
-      description: "Generate follow-up prompt suggestions for the current turn",
+      description: nextPromptsTranslations.message("slashNextDesc"),
       argumentHint: "",
       context: "agent",
       async onSubmit({ agent, rpc }) {
@@ -208,8 +209,8 @@ export default function contribute(client: PluginClientContext) {
 
     client.addSlashCommand({
       name: "enhance",
-      description: "Optimize a rough prompt and fill it into the chat input box",
-      argumentHint: "<your rough prompt>",
+      description: nextPromptsTranslations.message("slashEnhanceDesc"),
+      argumentHint: nextPromptsTranslations.message("slashEnhanceHint"),
       context: "agent",
       async onSubmit({ args, agent, rpc, composers }) {
         const draft = args.trim();
