@@ -551,7 +551,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
   });
 
   const [enabled, setEnabled] = useState(true);
-  const [mode, setMode] = useState<NextPromptsMode>("auto");
+  const [mode, setMode] = useState<NextPromptsMode>("paseo");
   const [displayMode, setDisplayMode] = useState<NextPromptsDisplayMode>("composer");
   const [maxSuggestions, setMaxSuggestions] = useState(3);
   const [language, setLanguage] = useState<NextPromptsLanguage>("auto");
@@ -700,16 +700,16 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
           </View>
         </View>
 
-        <View style={{ gap: 6 }}>
+        <View style={{ gap: 8 }}>
           <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-            Generation Engine
+            Generation Mode
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {(
               [
-                { id: "auto", label: "Auto (LLM → Paseo AI → Local)" },
-                { id: "paseo", label: "Paseo Provider (Zero-Key AI)" },
-                { id: "llm", label: "Custom Fast LLM Only" },
+                { id: "paseo", label: "Background Session (Auto-Archive · Default)" },
+                { id: "llm", label: "Direct LLM API (Base URL / Key)" },
+                { id: "auto", label: "Auto (Direct LLM → Background Session → Local)" },
                 { id: "heuristic", label: "Local Context Only (0ms)" },
               ] as const
             ).map((opt) => (
@@ -720,42 +720,68 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
               </Pressable>
             ))}
           </View>
-        </View>
 
-        <View style={{ gap: 6 }}>
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
-            Paseo AI Provider (used automatically when no API Key is set)
-          </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            {["auto", "codex", "cursor", "claude", "opencode", "copilot"].map((p) => (
-              <Pressable
-                key={p}
-                accessibilityRole="button"
-                onPress={() => setPaseoProvider(p)}
-                style={chipStyle(paseoProvider === p)}
-              >
-                <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>
-                  {p === "auto" ? "Auto (Match Agent)" : p}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput
-            value={paseoProvider}
-            onChangeText={setPaseoProvider}
-            placeholder="auto or provider / provider/model"
+          <View
             style={{
-              paddingHorizontal: 10,
-              paddingVertical: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
               borderRadius: 8,
+              backgroundColor: theme.colors.surface0,
               borderWidth: 1,
               borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface0,
-              color: theme.colors.foreground,
-              fontSize: 12,
+              borderLeftWidth: 3,
+              borderLeftColor: theme.colors.accent,
+              gap: 6,
             }}
-          />
+          >
+            <Text style={{ color: theme.colors.foreground, fontSize: 12, fontWeight: "600" }}>
+              Tip: Background Session vs. Direct LLM API
+            </Text>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 17 }}>
+              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Background Session (Auto-Archive · Default)</Text>: Zero extra API key — reuses your existing Paseo AI provider in a temporary background session and automatically archives both the agent and workspace when done. Slightly slower (~5–15s) and may still appear in the underlying CLI&apos;s local history.
+            </Text>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 17 }}>
+              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Direct LLM API (Base URL / Key)</Text>: Sends a direct HTTP request to an OpenAI-compatible endpoint (OpenAI / DeepSeek / OpenRouter / local Ollama). Faster (~1–2s) and creates zero background sessions in Paseo or any CLI, but requires configuring a Base URL, Model, and API Key.
+            </Text>
+          </View>
         </View>
+
+        {mode === "paseo" || mode === "auto" ? (
+          <View style={{ gap: 6 }}>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontWeight: "600" }}>
+              Paseo AI Provider (Temporary Background Session · Auto-Archived)
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {["auto", "codex", "cursor", "claude", "opencode", "copilot"].map((p) => (
+                <Pressable
+                  key={p}
+                  accessibilityRole="button"
+                  onPress={() => setPaseoProvider(p)}
+                  style={chipStyle(paseoProvider === p)}
+                >
+                  <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>
+                    {p === "auto" ? "Auto (Match Agent)" : p}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={paseoProvider}
+              onChangeText={setPaseoProvider}
+              placeholder="auto or provider / provider/model"
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface0,
+                color: theme.colors.foreground,
+                fontSize: 12,
+              }}
+            />
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
           <View style={{ gap: 6 }}>
@@ -792,159 +818,163 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
         </View>
       </View>
 
-      {/* Fast LLM Config */}
-      <View
-        style={{
-          padding: 14,
-          borderRadius: 12,
-          backgroundColor: theme.colors.surface1,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-          gap: 10,
-        }}
-      >
-        <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 14 }}>
-          Fast LLM Provider (OpenAI-Compatible / Ollama)
-        </Text>
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-          Optional. Leave empty to use the instant local engine (or set OPENAI_API_KEY in the daemon env).
-        </Text>
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {LLM_PRESETS.map((p) => (
-            <Pressable
-              key={p.label}
-              accessibilityRole="button"
-              onPress={() => {
-                setApiBaseUrl(p.baseUrl);
-                setModel(p.model);
-              }}
-              style={chipStyle(apiBaseUrl === p.baseUrl)}
-            >
-              <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>{p.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={{ gap: 4 }}>
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>API Base URL</Text>
-          <TextInput
-            value={apiBaseUrl}
-            onChangeText={setApiBaseUrl}
-            placeholder="https://api.openai.com/v1"
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface0,
-              color: theme.colors.foreground,
-              fontSize: 12,
-            }}
-          />
-        </View>
-
-        <View style={{ gap: 4 }}>
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Model</Text>
-          <TextInput
-            value={model}
-            onChangeText={setModel}
-            placeholder="gpt-4o-mini"
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface0,
-              color: theme.colors.foreground,
-              fontSize: 12,
-            }}
-          />
-        </View>
-
-        <View style={{ gap: 4 }}>
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-            API Key {configQuery.data?.hasApiKey ? `(Saved: ${configQuery.data.apiKeyPreview})` : "(Not set)"}
+      {/* Direct LLM API Config */}
+      {mode === "llm" || mode === "auto" ? (
+        <View
+          style={{
+            padding: 14,
+            borderRadius: 12,
+            backgroundColor: theme.colors.surface1,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            gap: 10,
+          }}
+        >
+          <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 14 }}>
+            Direct LLM API (OpenAI-Compatible / Ollama)
           </Text>
-          <TextInput
-            value={apiKeyInput}
-            onChangeText={setApiKeyInput}
-            secureTextEntry
-            placeholder={
-              configQuery.data?.hasApiKey
-                ? "Enter a new key to replace, or leave blank to keep current"
-                : "sk-... (optional for local Ollama)"
-            }
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface0,
-              color: theme.colors.foreground,
-              fontSize: 12,
-            }}
-          />
-        </View>
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+            Calls the HTTP endpoint directly without spawning any Paseo background session (or set OPENAI_API_KEY / PASEO_NEXT_PROMPTS_API_KEY in the daemon env).
+          </Text>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={saveMutation.isPending}
-            onPress={() => saveMutation.mutate(false)}
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              borderRadius: 8,
-              backgroundColor: theme.colors.accent,
-              opacity: saveMutation.isPending ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ color: theme.colors.accentForeground, fontWeight: "700", fontSize: 13 }}>
-              {saveMutation.isPending ? "Saving..." : "Save Settings"}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {LLM_PRESETS.map((p) => (
+              <Pressable
+                key={p.label}
+                accessibilityRole="button"
+                onPress={() => {
+                  setApiBaseUrl(p.baseUrl);
+                  setModel(p.model);
+                }}
+                style={chipStyle(apiBaseUrl === p.baseUrl)}
+              >
+                <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </View>
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={testMutation.isPending}
-            onPress={() => testMutation.mutate()}
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface0,
-              opacity: testMutation.isPending ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 13 }}>
-              {testMutation.isPending ? "Testing..." : "Test LLM"}
-            </Text>
-          </Pressable>
-
-          {configQuery.data?.hasApiKey ? (
-            <Pressable
-              accessibilityRole="button"
-              disabled={saveMutation.isPending}
-              onPress={() => saveMutation.mutate(true)}
+          <View style={{ gap: 4 }}>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>API Base URL</Text>
+            <TextInput
+              value={apiBaseUrl}
+              onChangeText={setApiBaseUrl}
+              placeholder="https://api.openai.com/v1"
               style={{
-                paddingHorizontal: 12,
-                paddingVertical: 10,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: theme.colors.border,
                 backgroundColor: theme.colors.surface0,
+                color: theme.colors.foreground,
+                fontSize: 12,
+              }}
+            />
+          </View>
+
+          <View style={{ gap: 4 }}>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Model</Text>
+            <TextInput
+              value={model}
+              onChangeText={setModel}
+              placeholder="gpt-4o-mini"
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface0,
+                color: theme.colors.foreground,
+                fontSize: 12,
+              }}
+            />
+          </View>
+
+          <View style={{ gap: 4 }}>
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+              API Key {configQuery.data?.hasApiKey ? `(Saved: ${configQuery.data.apiKeyPreview})` : "(Not set)"}
+            </Text>
+            <TextInput
+              value={apiKeyInput}
+              onChangeText={setApiKeyInput}
+              secureTextEntry
+              placeholder={
+                configQuery.data?.hasApiKey
+                  ? "Enter a new key to replace, or leave blank to keep current"
+                  : "sk-... (optional for local Ollama)"
+              }
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface0,
+                color: theme.colors.foreground,
+                fontSize: 12,
+              }}
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={testMutation.isPending}
+              onPress={() => testMutation.mutate()}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface0,
+                opacity: testMutation.isPending ? 0.6 : 1,
               }}
             >
-              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Clear Key</Text>
+              <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 12 }}>
+                {testMutation.isPending ? "Testing..." : "Test LLM"}
+              </Text>
             </Pressable>
-          ) : null}
+
+            {configQuery.data?.hasApiKey ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={saveMutation.isPending}
+                onPress={() => saveMutation.mutate(true)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface0,
+                }}
+              >
+                <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Clear Key</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
+      ) : null}
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={saveMutation.isPending}
+          onPress={() => saveMutation.mutate(false)}
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 8,
+            backgroundColor: theme.colors.accent,
+            opacity: saveMutation.isPending ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ color: theme.colors.accentForeground, fontWeight: "700", fontSize: 13 }}>
+            {saveMutation.isPending ? "Saving..." : "Save Settings"}
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );

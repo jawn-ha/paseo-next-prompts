@@ -4,9 +4,10 @@ Next Prompts automatically suggests clickable follow-up prompts right below ever
 
 When an agent finishes a turn, the plugin inspects the latest user request, assistant reply, tool outcomes, and workspace `git status`. It then appends a compact suggestion card directly below the reply. Click any suggestion to send it immediately, or click the edit icon to load it into the composer input before sending.
 
-## Dual engines
+## Generation modes
 
-- **Auto mode (default)**: Uses a fast OpenAI-compatible LLM (OpenAI, DeepSeek, OpenRouter, or local Ollama) when configured, and falls back to the instant local engine otherwise.
+- **Background Session (Auto-Archive · Default)**: Reuses your configured Paseo AI provider (Codex, Cursor, Claude, etc.) with zero extra API key. Spawns a temporary background session and automatically archives both the agent and workspace when done.
+- **Direct LLM API (Base URL / Key)**: Calls an OpenAI-compatible HTTP endpoint (OpenAI, DeepSeek, OpenRouter, or local Ollama) directly. Faster (~1–2s) and creates zero background sessions in Paseo or any underlying CLI.
 - **Instant local engine**: Works offline with zero API keys by analyzing errors, proposed plans, modified files, and uncommitted diffs to suggest context-aware next steps in Chinese or English.
 
 ## Controls

@@ -51,7 +51,7 @@ interface StoredConfig {
 
 const DEFAULT_CONFIG: StoredConfig = {
   enabled: true,
-  mode: "auto",
+  mode: "paseo",
   displayMode: "composer",
   maxSuggestions: 3,
   language: "auto",
@@ -1355,7 +1355,7 @@ export async function generateAndAppendNextPrompts(params: {
   const heuristicSuggestions = buildHeuristicSuggestions(snap, lang, cfg.maxSuggestions, previousPrompts);
   const shouldPublishProgressive =
     !params.force &&
-    cfg.mode === "auto" &&
+    (cfg.mode === "paseo" || cfg.mode === "auto") &&
     cfg.displayMode === "composer" &&
     heuristicSuggestions.length > 0;
 
