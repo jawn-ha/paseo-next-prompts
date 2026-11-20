@@ -70,7 +70,7 @@ interface StoredConfig {
   paseoProvider: string;
   apiBaseUrl: string;
   model: string;
-  apiKey: string;
+  apiKeysByEndpoint: Record<string, string>;
   skipBackgroundAgents: boolean;
 }
 
@@ -83,9 +83,56 @@ const DEFAULT_CONFIG: StoredConfig = {
   paseoProvider: "auto",
   apiBaseUrl: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
-  apiKey: "",
+  apiKeysByEndpoint: {},
   skipBackgroundAgents: true,
 };
+
+export function normalizeApiBaseUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    const pathname = u.pathname.replace(/\/+$/, "");
+    return `${u.origin.toLowerCase()}${pathname}`;
+  } catch {
+    return "";
+  }
+}
+
+export function isOpenAiApiEndpoint(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr.trim());
+    return (
+      u.protocol === "https:" &&
+      u.hostname.toLowerCase() === "api.openai.com" &&
+      (u.port === "" || u.port === "443") &&
+      !u.username &&
+      !u.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isLocalEndpoint(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr.trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+function buildChatCompletionsEndpoint(apiBaseUrl: string): string {
+  const normalized = normalizeApiBaseUrl(apiBaseUrl);
+  if (!normalized) {
+    throw new Error("Invalid API Base URL: must be a valid http:// or https:// URL");
+  }
+  return `${normalized}/chat/completions`;
+}
 
 function getConfigPath(): string {
   const paseoHome = process.env.PASEO_HOME || path.join(os.homedir(), ".paseo");
@@ -95,8 +142,34 @@ function getConfigPath(): string {
 function loadConfig(): StoredConfig {
   const filePath = getConfigPath();
   try {
-    if (!fs.existsSync(filePath)) return { ...DEFAULT_CONFIG };
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<StoredConfig>;
+    if (!fs.existsSync(filePath)) return { ...DEFAULT_CONFIG, apiKeysByEndpoint: {} };
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<StoredConfig> & {
+      apiKey?: unknown;
+    };
+    const hasExplicitBaseUrl = typeof raw.apiBaseUrl === "string" && raw.apiBaseUrl.trim().length > 0;
+    const normalizedExplicitBaseUrl = hasExplicitBaseUrl ? normalizeApiBaseUrl(raw.apiBaseUrl!) : "";
+    const apiBaseUrl = normalizedExplicitBaseUrl || DEFAULT_CONFIG.apiBaseUrl;
+
+    const apiKeysByEndpoint: Record<string, string> = {};
+    if (raw.apiKeysByEndpoint && typeof raw.apiKeysByEndpoint === "object" && !Array.isArray(raw.apiKeysByEndpoint)) {
+      for (const [rawEndpoint, rawKey] of Object.entries(raw.apiKeysByEndpoint)) {
+        const normalizedEndpoint = normalizeApiBaseUrl(rawEndpoint);
+        if (normalizedEndpoint && typeof rawKey === "string" && rawKey.trim()) {
+          apiKeysByEndpoint[normalizedEndpoint] = rawKey.trim();
+        }
+      }
+    }
+
+    // Legacy migration: bind any previous top-level apiKey strictly to its original apiBaseUrl
+    if (
+      typeof raw.apiKey === "string" &&
+      raw.apiKey.trim() &&
+      (!hasExplicitBaseUrl || Boolean(normalizedExplicitBaseUrl)) &&
+      !apiKeysByEndpoint[apiBaseUrl]
+    ) {
+      apiKeysByEndpoint[apiBaseUrl] = raw.apiKey.trim();
+    }
+
     return {
       enabled: typeof raw.enabled === "boolean" ? raw.enabled : DEFAULT_CONFIG.enabled,
       mode:
@@ -119,19 +192,16 @@ function loadConfig(): StoredConfig {
         typeof raw.paseoProvider === "string" && raw.paseoProvider.trim()
           ? raw.paseoProvider.trim()
           : DEFAULT_CONFIG.paseoProvider,
-      apiBaseUrl:
-        typeof raw.apiBaseUrl === "string" && raw.apiBaseUrl.trim()
-          ? raw.apiBaseUrl.trim()
-          : DEFAULT_CONFIG.apiBaseUrl,
+      apiBaseUrl,
       model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : DEFAULT_CONFIG.model,
-      apiKey: typeof raw.apiKey === "string" ? raw.apiKey : "",
+      apiKeysByEndpoint,
       skipBackgroundAgents:
         typeof raw.skipBackgroundAgents === "boolean"
           ? raw.skipBackgroundAgents
           : DEFAULT_CONFIG.skipBackgroundAgents,
     };
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return { ...DEFAULT_CONFIG, apiKeysByEndpoint: {} };
   }
 }
 
@@ -142,21 +212,23 @@ function writeConfig(cfg: StoredConfig): void {
 }
 
 function resolveEffectiveApiKey(cfg: StoredConfig): string {
-  return (
-    cfg.apiKey.trim() ||
-    process.env.PASEO_NEXT_PROMPTS_API_KEY?.trim() ||
-    process.env.OPENAI_API_KEY?.trim() ||
-    ""
-  );
-}
+  const endpointKey = normalizeApiBaseUrl(cfg.apiBaseUrl);
+  if (!endpointKey) return "";
 
-function isLocalEndpoint(urlStr: string): boolean {
-  try {
-    const u = new URL(urlStr);
-    return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "::1";
-  } catch {
-    return false;
+  const stored = cfg.apiKeysByEndpoint[endpointKey]?.trim();
+  if (stored) return stored;
+
+  const envPluginKey = process.env.PASEO_NEXT_PROMPTS_API_KEY?.trim();
+  const envPluginBaseUrl = process.env.PASEO_NEXT_PROMPTS_API_BASE_URL?.trim();
+  if (envPluginKey && envPluginBaseUrl && normalizeApiBaseUrl(envPluginBaseUrl) === endpointKey) {
+    return envPluginKey;
   }
+
+  if (isOpenAiApiEndpoint(endpointKey)) {
+    return process.env.OPENAI_API_KEY?.trim() || "";
+  }
+
+  return "";
 }
 
 function canUseDirectLlm(cfg: StoredConfig): boolean {
@@ -203,13 +275,20 @@ export function savePublicConfig(
     cfg.paseoProvider = input.paseoProvider.trim();
   }
   if (typeof input.apiBaseUrl === "string" && input.apiBaseUrl.trim()) {
-    cfg.apiBaseUrl = input.apiBaseUrl.trim().replace(/\/+$/, "");
+    const normalizedUrl = normalizeApiBaseUrl(input.apiBaseUrl);
+    if (!normalizedUrl) {
+      throw new Error("Invalid API Base URL: must be a valid http:// or https:// URL");
+    }
+    cfg.apiBaseUrl = normalizedUrl;
   }
   if (typeof input.model === "string" && input.model.trim()) cfg.model = input.model.trim();
-  if (input.clearApiKey) {
-    cfg.apiKey = "";
-  } else if (typeof input.apiKey === "string" && input.apiKey.trim()) {
-    cfg.apiKey = input.apiKey.trim();
+  const endpointKey = normalizeApiBaseUrl(cfg.apiBaseUrl);
+  if (endpointKey) {
+    if (input.clearApiKey) {
+      delete cfg.apiKeysByEndpoint[endpointKey];
+    } else if (typeof input.apiKey === "string" && input.apiKey.trim()) {
+      cfg.apiKeysByEndpoint[endpointKey] = input.apiKey.trim();
+    }
   }
   if (typeof input.skipBackgroundAgents === "boolean") {
     cfg.skipBackgroundAgents = input.skipBackgroundAgents;
@@ -1004,13 +1083,13 @@ async function callLlmSuggestions(
   lang: "zh" | "en",
   previousPrompts: string[] = [],
 ): Promise<NextPromptItem[]> {
+  const endpoint = buildChatCompletionsEndpoint(cfg.apiBaseUrl);
   const apiKey = resolveEffectiveApiKey(cfg);
   const local = isLocalEndpoint(cfg.apiBaseUrl);
   if (!apiKey && !local) {
     throw new Error("No API key configured for remote LLM endpoint");
   }
 
-  const endpoint = `${cfg.apiBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const { systemPrompt, userPayload } = buildSuggestionPrompts(cfg, snap, lang, previousPrompts);
 
   const controller = new AbortController();
@@ -1636,13 +1715,13 @@ async function callLlmOptimizePrompt(
   lang: "zh" | "en",
   contextSummary: string,
 ): Promise<string> {
+  const endpoint = buildChatCompletionsEndpoint(cfg.apiBaseUrl);
   const apiKey = resolveEffectiveApiKey(cfg);
   const local = isLocalEndpoint(cfg.apiBaseUrl);
   if (!apiKey && !local) {
     throw new Error("No API key configured for remote LLM endpoint");
   }
 
-  const endpoint = `${cfg.apiBaseUrl.replace(/\/+$/, "")}/chat/completions`;
   const { systemPrompt, userPayload } = buildOptimizePrompts(draft, lang, contextSummary);
 
   const controller = new AbortController();

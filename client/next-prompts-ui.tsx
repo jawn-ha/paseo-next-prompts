@@ -814,6 +814,21 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
   });
 
   const pad = layout.compact ? 14 : 24;
+  const normalizeEndpointForUi = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    try {
+      const u = new URL(trimmed);
+      return `${u.origin.toLowerCase()}${u.pathname.replace(/\/+$/, "")}`;
+    } catch {
+      return trimmed.replace(/\/+$/, "").toLowerCase();
+    }
+  };
+  const savedEndpointKey = normalizeEndpointForUi(configQuery.data?.apiBaseUrl ?? "");
+  const currentEndpointKey = normalizeEndpointForUi(apiBaseUrl);
+  const isSameEndpointAsSaved = Boolean(savedEndpointKey) && savedEndpointKey === currentEndpointKey;
+  const currentEndpointHasKey = isSameEndpointAsSaved && Boolean(configQuery.data?.hasApiKey);
+
   const chipStyle = (active: boolean) => ({
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -1041,8 +1056,9 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
                 onPress={() => {
                   setApiBaseUrl(p.baseUrl);
                   setModel(p.model);
+                  setApiKeyInput("");
                 }}
-                style={chipStyle(apiBaseUrl === p.baseUrl)}
+                style={chipStyle(normalizeEndpointForUi(apiBaseUrl) === normalizeEndpointForUi(p.baseUrl))}
               >
                 <Text style={{ color: theme.colors.foreground, fontSize: 11.5 }}>
                   {p.label === "Ollama (Local)" ? copy.presetOllama : p.label}
@@ -1092,16 +1108,18 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
           <View style={{ gap: 4 }}>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
               {copy.apiKeyLabel}{" "}
-              {configQuery.data?.hasApiKey
-                ? formatCopy(copy.apiKeySaved, { preview: configQuery.data.apiKeyPreview })
-                : copy.apiKeyNotSet}
+              {!isSameEndpointAsSaved
+                ? copy.apiKeyEndpointChanged
+                : currentEndpointHasKey
+                  ? formatCopy(copy.apiKeySaved, { preview: configQuery.data?.apiKeyPreview ?? "" })
+                  : copy.apiKeyNotSet}
             </Text>
             <TextInput
               value={apiKeyInput}
               onChangeText={setApiKeyInput}
               secureTextEntry
               placeholder={
-                configQuery.data?.hasApiKey
+                currentEndpointHasKey
                   ? copy.apiKeyPlaceholderReplace
                   : copy.apiKeyPlaceholderNew
               }
@@ -1138,7 +1156,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
               </Text>
             </Pressable>
 
-            {configQuery.data?.hasApiKey ? (
+            {currentEndpointHasKey ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={saveMutation.isPending}

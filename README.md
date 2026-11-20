@@ -92,7 +92,7 @@ paseo plugin add .
 
 ### Configuration File (Optional)
 
-Settings are stored at `~/.paseo/next-prompts-config.json`. You can also supply an API key via `PASEO_NEXT_PROMPTS_API_KEY` or `OPENAI_API_KEY` in the Paseo daemon environment.
+Settings are stored at `~/.paseo/next-prompts-config.json`. Stored API keys are bound to their configured API Base URL. In the Paseo daemon environment, `OPENAI_API_KEY` is only used with `https://api.openai.com`, and `PASEO_NEXT_PROMPTS_API_KEY` is only used when `PASEO_NEXT_PROMPTS_API_BASE_URL` matches the configured endpoint. Local endpoints (`localhost`, `127.0.0.1`, `[::1]`) work without an API key.
 
 ---
 

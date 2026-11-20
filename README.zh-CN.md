@@ -92,7 +92,7 @@ paseo plugin add .
 
 ### 配置文件（可选）
 
-设置保存在 `~/.paseo/next-prompts-config.json`，也可通过 Paseo daemon 环境变量 `PASEO_NEXT_PROMPTS_API_KEY` 或 `OPENAI_API_KEY` 传入 API Key。
+设置保存在 `~/.paseo/next-prompts-config.json`，已保存的 API Key 与对应 API Base URL 严格绑定。在 Paseo daemon 环境变量中，`OPENAI_API_KEY` 仅用于 `https://api.openai.com`；`PASEO_NEXT_PROMPTS_API_KEY` 仅在 `PASEO_NEXT_PROMPTS_API_BASE_URL` 与当前配置端点一致时生效。本地接口（`localhost`、`127.0.0.1`、`[::1]`）无需 API Key 即可使用。
 
 ---
 
