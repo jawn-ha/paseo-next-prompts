@@ -53,6 +53,7 @@ export default function contribute(server: PluginServerContext) {
         turnId,
         cwd: agent.cwd,
         provider: agent.provider,
+        workspaceId: agent.workspaceId,
         turnFailed: outcome.kind === "failed",
       });
     } catch {

@@ -236,6 +236,7 @@ interface TurnSnapshot {
   hasUncommittedChanges: boolean;
   resolvedCwd: string | null;
   resolvedProvider: string | null;
+  resolvedWorkspaceId: string | null;
 }
 
 function execGitShort(cwd: string, args: string[]): Promise<string> {
@@ -296,14 +297,35 @@ async function extractTurnSnapshot(
   cwd?: string | null,
   provider?: string | null,
   turnFailed = false,
+  workspaceId?: string | null,
 ): Promise<TurnSnapshot | null> {
-  const page = await paseo.agents.ref(agentId).timeline.refetch({
+  let page = await paseo.agents.ref(agentId).timeline.refetch({
     direction: "tail",
-    limit: 3,
+    limit: 6,
     wholeTurns: true,
   });
 
-  const entries = Array.isArray((page as any)?.entries) ? ((page as any).entries as Array<Record<string, any>>) : [];
+  let entries = Array.isArray((page as any)?.entries) ? ((page as any).entries as Array<Record<string, any>>) : [];
+  const hasAnyMessage = (list: Array<Record<string, any>>) =>
+    list.some((e) => {
+      const item = (e.item ?? e) as Record<string, any>;
+      if (item?.type !== "user_message" && item?.type !== "assistant_message") return false;
+      return extractTextFromTimelineItem(item).trim().length > 0;
+    });
+
+  if (!hasAnyMessage(entries)) {
+    const fallbackPage = await paseo.agents.ref(agentId).timeline.refetch({
+      direction: "tail",
+      limit: 40,
+    }).catch(() => null);
+    const fallbackEntries = Array.isArray((fallbackPage as any)?.entries)
+      ? ((fallbackPage as any).entries as Array<Record<string, any>>)
+      : [];
+    if (fallbackEntries.length > 0) {
+      page = fallbackPage ?? page;
+      entries = fallbackEntries;
+    }
+  }
   if (entries.length === 0) return null;
 
   // Group entries by turnId while preserving chronological order
@@ -331,8 +353,29 @@ async function extractTurnSnapshot(
     byTurn.get(finalKey)!.push(entry);
   }
 
-  const targetTurnKey =
-    turnId && byTurn.has(turnId) ? turnId : turnOrder[turnOrder.length - 1];
+  const hasConversationText = (turnEntries: Array<Record<string, any>>): boolean =>
+    turnEntries.some((e) => {
+      const item = (e.item ?? e) as Record<string, any>;
+      if (item?.type !== "user_message" && item?.type !== "assistant_message") return false;
+      return extractTextFromTimelineItem(item).trim().length > 0;
+    });
+
+  let targetTurnKey: string | undefined =
+    turnId && byTurn.has(turnId) && hasConversationText(byTurn.get(turnId)!)
+      ? turnId
+      : undefined;
+  if (!targetTurnKey) {
+    for (let i = turnOrder.length - 1; i >= 0; i -= 1) {
+      const key = turnOrder[i];
+      if (hasConversationText(byTurn.get(key) ?? [])) {
+        targetTurnKey = key;
+        break;
+      }
+    }
+  }
+  if (!targetTurnKey) {
+    targetTurnKey = turnOrder[turnOrder.length - 1];
+  }
   const activeEntries = byTurn.get(targetTurnKey) ?? entries;
 
   // Build concise summary of up to 2 prior turns for broader context
@@ -430,6 +473,15 @@ async function extractTurnSnapshot(
 
   const pageAgent = (page as any)?.agent as Record<string, any> | undefined;
   const resolvedCwd = cwd || pageAgent?.cwd || null;
+  let resolvedWorkspaceId =
+    workspaceId ||
+    (typeof pageAgent?.workspaceId === "string" ? pageAgent.workspaceId : null);
+  if (!resolvedWorkspaceId) {
+    const refreshed = await paseo.agents.ref(agentId).refresh().catch(() => null);
+    if (refreshed?.agent?.workspaceId) {
+      resolvedWorkspaceId = refreshed.agent.workspaceId;
+    }
+  }
   const resolvedProvider =
     provider ||
     pageAgent?.runtimeInfo?.provider ||
@@ -460,6 +512,7 @@ async function extractTurnSnapshot(
     hasUncommittedChanges: git.modified.length + git.untracked.length > 0,
     resolvedCwd,
     resolvedProvider,
+    resolvedWorkspaceId,
   };
 }
 
@@ -1124,14 +1177,14 @@ async function runPaseoHelperPrompt(params: {
   provider: string;
   modeId?: string;
   cwd?: string | null;
+  workspaceId?: string | null;
   systemPrompt: string;
   prompt: string;
   timeoutMs?: number;
 }): Promise<string> {
-  const helper = await params.paseo.agents.create({
+  const baseCreateOptions = {
     background: true,
     autoArchive: true,
-    cwd: params.cwd || os.homedir(),
     title: "Next Prompts Helper",
     metadata: { [HELPER_METADATA_KEY]: true },
     config: {
@@ -1140,7 +1193,27 @@ async function runPaseoHelperPrompt(params: {
       systemPrompt: params.systemPrompt,
     },
     prompt: params.prompt,
-  });
+  };
+
+  let createdStandaloneWorkspace = false;
+  let helper;
+  if (params.workspaceId) {
+    try {
+      helper = await params.paseo.workspaces.ref(params.workspaceId).agents.create(baseCreateOptions);
+    } catch {
+      createdStandaloneWorkspace = true;
+      helper = await params.paseo.agents.create({
+        ...baseCreateOptions,
+        cwd: params.cwd || os.homedir(),
+      });
+    }
+  } else {
+    createdStandaloneWorkspace = true;
+    helper = await params.paseo.agents.create({
+      ...baseCreateOptions,
+      cwd: params.cwd || os.homedir(),
+    });
+  }
 
   try {
     const result = await helper.waitForFinish(params.timeoutMs ?? 28000);
@@ -1151,14 +1224,16 @@ async function runPaseoHelperPrompt(params: {
     if (!text) throw new Error("Paseo helper returned empty message");
     return text;
   } finally {
-    const workspaceId =
-      helper.workspaceId ??
-      helper.current()?.workspaceId ??
-      (await helper.refresh().catch(() => null))?.agent.workspaceId ??
-      null;
     await helper.archive().catch(() => {});
-    if (workspaceId) {
-      await params.paseo.workspaces.archive(workspaceId).catch(() => {});
+    if (createdStandaloneWorkspace) {
+      const helperWorkspaceId =
+        helper.workspaceId ??
+        helper.current()?.workspaceId ??
+        (await helper.refresh().catch(() => null))?.agent.workspaceId ??
+        null;
+      if (helperWorkspaceId && helperWorkspaceId !== params.workspaceId) {
+        await params.paseo.workspaces.archive(helperWorkspaceId).catch(() => {});
+      }
     }
   }
 }
@@ -1190,6 +1265,7 @@ async function callPaseoAgentSuggestions(
     provider: resolved.provider,
     modeId: resolved.modeId,
     cwd: snap.resolvedCwd,
+    workspaceId: snap.resolvedWorkspaceId,
     systemPrompt,
     prompt: fullPrompt,
     timeoutMs: 28000,
@@ -1222,6 +1298,7 @@ export async function testLlmConnection() {
       hasUncommittedChanges: true,
       resolvedCwd: null,
       resolvedProvider: null,
+      resolvedWorkspaceId: null,
     };
     const lang = cfg.language === "zh" ? "zh" : "en";
     const suggestions = await callLlmSuggestions(cfg, sampleSnap, lang);
@@ -1298,6 +1375,7 @@ export async function generateAndAppendNextPrompts(params: {
   turnId?: string | null;
   cwd?: string | null;
   provider?: string | null;
+  workspaceId?: string | null;
   previousPrompts?: string[];
   turnFailed?: boolean;
   force?: boolean;
@@ -1316,6 +1394,7 @@ export async function generateAndAppendNextPrompts(params: {
     params.cwd,
     params.provider,
     Boolean(params.turnFailed),
+    params.workspaceId,
   );
   if (!snap) {
     return { ok: false, engine: "heuristic", count: 0, error: "No recent turn found to analyze." };
@@ -1587,6 +1666,7 @@ export async function optimizeUserPrompt(params: {
 
   let resolvedCwd = params.cwd || null;
   let resolvedProvider = params.provider || null;
+  let resolvedWorkspaceId: string | null = null;
   let recentAssistant = "";
   try {
     const snap = await extractTurnSnapshot(params.paseo, params.agentId, null, resolvedCwd, resolvedProvider);
@@ -1594,8 +1674,15 @@ export async function optimizeUserPrompt(params: {
       recentAssistant = snap.assistantText.slice(-1200);
       resolvedCwd = snap.resolvedCwd || resolvedCwd;
       resolvedProvider = snap.resolvedProvider || resolvedProvider;
+      resolvedWorkspaceId = snap.resolvedWorkspaceId || resolvedWorkspaceId;
     }
   } catch {}
+  if (!resolvedWorkspaceId) {
+    const refreshed = await params.paseo.agents.ref(params.agentId).refresh().catch(() => null);
+    if (refreshed?.agent?.workspaceId) {
+      resolvedWorkspaceId = refreshed.agent.workspaceId;
+    }
+  }
 
   const git = await readGitContext(resolvedCwd);
   const changedFiles = [...git.modified, ...git.untracked];
@@ -1639,6 +1726,7 @@ export async function optimizeUserPrompt(params: {
           provider: resolved.provider,
           modeId: resolved.modeId,
           cwd: resolvedCwd,
+          workspaceId: resolvedWorkspaceId,
           systemPrompt,
           prompt: `Rewrite this rough prompt (do NOT call any tools):\n\n${userPayload}`,
           timeoutMs: 28000,

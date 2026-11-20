@@ -873,7 +873,7 @@ export function NextPromptsSettingsScreen({ theme, layout }: PluginSurfaceProps)
               Tip: Background Session vs. Direct LLM API
             </Text>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 17 }}>
-              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Background Session (Auto-Archive · Default)</Text>: Zero extra API key — reuses your existing Paseo AI provider in a temporary background session and automatically archives both the agent and workspace when done. Slightly slower (~5–15s) and may still appear in the underlying CLI&apos;s local history.
+              • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Background Session (Auto-Archive · Default)</Text>: Zero extra API key — reuses your existing Paseo AI provider in a temporary background agent inside the current workspace (no new workspace created) and automatically archives the helper agent when done. Slightly slower (~5–15s) and may still appear in the underlying CLI&apos;s local history.
             </Text>
             <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 17 }}>
               • <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Direct LLM API (Base URL / Key)</Text>: Sends a direct HTTP request to an OpenAI-compatible endpoint (OpenAI / DeepSeek / OpenRouter / local Ollama). Faster (~1–2s) and creates zero background sessions in Paseo or any CLI, but requires configuring a Base URL, Model, and API Key.
