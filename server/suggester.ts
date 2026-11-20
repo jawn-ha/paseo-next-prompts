@@ -1320,6 +1320,22 @@ export async function testLlmConnection() {
   }
 }
 
+async function isAgentIdleAndReady(paseo: PaseoServerApi, agentId: string): Promise<boolean> {
+  try {
+    const refreshed = await paseo.agents.ref(agentId).refresh();
+    const agent = refreshed?.agent;
+    if (!agent) return false;
+    if (agent.status !== "idle") return false;
+    if (agent.activeTurn != null) return false;
+    if (Array.isArray(agent.pendingPermissions) && agent.pendingPermissions.length > 0) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function publishSuggestions(params: {
   paseo: PaseoServerApi;
   agentId: string;
@@ -1329,7 +1345,11 @@ async function publishSuggestions(params: {
   model?: string;
   suggestions: NextPromptItem[];
   composerOnly?: boolean;
+  force?: boolean;
 }): Promise<void> {
+  if (!params.force && !(await isAgentIdleAndReady(params.paseo, params.agentId))) {
+    return;
+  }
   const payload: NextPromptsTimelineData = {
     turnId: params.resolvedTurnId,
     engine: params.engine,
@@ -1387,6 +1407,10 @@ export async function generateAndAppendNextPrompts(params: {
     return { ok: false, engine: "heuristic", count: 0 };
   }
 
+  if (!params.force && !(await isAgentIdleAndReady(params.paseo, params.agentId))) {
+    return { ok: false, engine: "heuristic", count: 0 };
+  }
+
   const mySeq = bumpAgentGeneration(params.agentId);
 
   const snap = await extractTurnSnapshot(
@@ -1400,6 +1424,9 @@ export async function generateAndAppendNextPrompts(params: {
   );
   if (!snap) {
     return { ok: false, engine: "heuristic", count: 0, error: "No recent turn found to analyze." };
+  }
+  if (!params.force && !params.turnFailed && !snap.assistantText.trim()) {
+    return { ok: false, engine: "heuristic", count: 0 };
   }
 
   const lang = detectLanguage(cfg.language, snap.userText, snap.assistantText);

@@ -31,6 +31,9 @@ export default function contribute(client: PluginClientContext) {
   const syncAgentSuggestions = (agent: {
     id: string;
     workspaceId?: string | null;
+    status?: string | null;
+    activeTurn?: unknown;
+    pendingPermissions?: unknown[] | null;
     metadata?: Record<string, unknown> | null;
   }) => {
     if (lifetime.signal.aborted) return;
@@ -62,6 +65,16 @@ export default function contribute(client: PluginClientContext) {
     }
 
     if (Boolean(agent.metadata?.[SESSION_DISABLED_METADATA_KEY])) {
+      lastAutoPrefilledByAgent.delete(agentId);
+      return;
+    }
+
+    // Never auto-prefill while the agent is still running or waiting for permission approval
+    const isIdle =
+      agent.status === "idle" &&
+      agent.activeTurn == null &&
+      !(Array.isArray(agent.pendingPermissions) && agent.pendingPermissions.length > 0);
+    if (!isIdle) {
       lastAutoPrefilledByAgent.delete(agentId);
       return;
     }
