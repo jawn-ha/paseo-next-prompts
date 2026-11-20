@@ -2,7 +2,8 @@
   "id": "paseo-next-prompts",
   "name": "Next Prompts",
   "description": "Codex-style automatic follow-up prompt suggestions after every agent turn, with both fast LLM and instant local engines.",
-  "media": [],
+  "icon": "assets/icon.png",
+  "media": ["assets/popover-en.png", "assets/settings-en.png"],
   "translations": {
     "zh-CN": {
       "name": "Next Prompts（下一步提示词）",
