@@ -1,0 +1,8 @@
+node_modules/
+package-lock.json
+.story/
+.DS_Store
+*.log
+dist/
+.env
+.env.*

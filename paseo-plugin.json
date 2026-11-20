@@ -1,0 +1,15 @@
+{
+  "id": "paseo-next-prompts",
+  "name": "Next Prompts",
+  "description": "Codex-style automatic follow-up prompt suggestions after every agent turn, with both fast LLM and instant local engines.",
+  "media": [],
+  "translations": {
+    "zh-CN": {
+      "name": "Next Prompts（下一步提示词）",
+      "description": "类似 Codex 的任务完成后自动推荐下一步提示词，支持快模型预测与零配置本地智能建议双引擎，一键发送或填入输入框。"
+    }
+  },
+  "requirements": {
+    "paseo": ">=0.16.0"
+  }
+}
