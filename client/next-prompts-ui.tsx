@@ -4,7 +4,7 @@ import type {
   PluginTimelineItemProps,
 } from "@getpaseo/plugin/client";
 import { useAgent, useComposers, useRpc } from "@getpaseo/plugin/client";
-import { TextInput, useToast } from "@getpaseo/plugin/client/ui";
+import { Icon, Modal, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -38,6 +38,8 @@ export function NextPromptsComposerPopover(props: PluginButtonContentProps) {
     <NextPromptsPopoverBody
       agentId={props.agentId}
       theme={props.theme}
+      host={props.host}
+      layout={props.layout}
       close={props.close}
     />
   );
@@ -46,10 +48,14 @@ export function NextPromptsComposerPopover(props: PluginButtonContentProps) {
 function NextPromptsPopoverBody({
   agentId,
   theme,
+  host,
+  layout,
   close,
 }: {
   agentId: string;
   theme: PluginButtonContentProps["theme"];
+  host: PluginButtonContentProps["host"];
+  layout: PluginButtonContentProps["layout"];
   close(): void;
 }) {
   const toast = useToast();
@@ -60,6 +66,7 @@ function NextPromptsPopoverBody({
   const composers = useComposers({ agentId });
 
   const [previousDraft, setPreviousDraft] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const agentData = useAgent(agentId, (a) => {
     const metadata = a.metadata as Record<string, unknown> | undefined;
@@ -243,47 +250,67 @@ function NextPromptsPopoverBody({
           ) : null}
         </View>
 
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityLabel="当前会话自动推荐"
-          accessibilityState={{ checked: !sessionDisabled }}
-          disabled={toggleSessionMutation.isPending}
-          onPress={() => toggleSessionMutation.mutate(sessionDisabled)}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            opacity: toggleSessionMutation.isPending ? 0.55 : 1,
-          }}
-        >
-          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>
-            {sessionDisabled ? "本会话已关" : "自动推荐"}
-          </Text>
-          <View
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityLabel="当前会话自动推荐"
+            accessibilityState={{ checked: !sessionDisabled }}
+            disabled={toggleSessionMutation.isPending}
+            onPress={() => toggleSessionMutation.mutate(sessionDisabled)}
             style={{
-              width: 32,
-              height: 18,
-              borderRadius: 9,
-              padding: 2,
-              justifyContent: "center",
-              alignItems: sessionDisabled ? "flex-start" : "flex-end",
-              backgroundColor: sessionDisabled ? theme.colors.surface2 : theme.colors.accent,
-              borderWidth: 1,
-              borderColor: sessionDisabled ? theme.colors.border : theme.colors.accent,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              opacity: toggleSessionMutation.isPending ? 0.55 : 1,
             }}
           >
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>
+              {sessionDisabled ? "本会话已关" : "自动推荐"}
+            </Text>
             <View
               style={{
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: sessionDisabled
-                  ? theme.colors.foregroundMuted
-                  : theme.colors.accentForeground,
+                width: 32,
+                height: 18,
+                borderRadius: 9,
+                padding: 2,
+                justifyContent: "center",
+                alignItems: sessionDisabled ? "flex-start" : "flex-end",
+                backgroundColor: sessionDisabled ? theme.colors.surface2 : theme.colors.accent,
+                borderWidth: 1,
+                borderColor: sessionDisabled ? theme.colors.border : theme.colors.accent,
               }}
-            />
-          </View>
-        </Pressable>
+            >
+              <View
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: sessionDisabled
+                    ? theme.colors.foregroundMuted
+                    : theme.colors.accentForeground,
+                }}
+              />
+            </View>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="打开 Next Prompts 设置"
+            onPress={() => setSettingsOpen(true)}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface1,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon name="Settings" size={13} color={theme.colors.foregroundMuted} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Primary Action: Optimize Current Draft (+ Undo / Clear) */}
@@ -482,6 +509,20 @@ function NextPromptsPopoverBody({
           </View>
         )}
       </View>
+      {settingsOpen ? (
+        <Modal
+          title="Next Prompts Settings"
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        >
+          <Modal.Content
+            scrollable={false}
+            contentContainerStyle={{ flex: 1, minHeight: 0, padding: 0, gap: 0 }}
+          >
+            <NextPromptsSettingsScreen theme={theme} host={host} layout={layout} />
+          </Modal.Content>
+        </Modal>
+      ) : null}
     </View>
   );
 }
