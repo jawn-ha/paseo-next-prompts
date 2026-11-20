@@ -199,123 +199,115 @@ function NextPromptsPopoverBody({
   return (
     <View
       style={{
-        width: 340,
+        width: 356,
         padding: 12,
-        gap: 8,
+        gap: 10,
         backgroundColor: theme.colors.surface0,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ color: theme.colors.foreground, fontWeight: "700", fontSize: 13 }}>
-            ✨ Next Prompts
-          </Text>
-          {engineLabel ? (
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 10.5 }}>
-              {engineLabel}
-            </Text>
-          ) : null}
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={regenMutation.isPending}
-            onPress={() => regenMutation.mutate()}
-            style={{
-              paddingHorizontal: 7,
-              paddingVertical: 3,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface1,
-              opacity: regenMutation.isPending ? 0.5 : 1,
-            }}
-          >
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>
-              {regenMutation.isPending ? "..." : "↻ 换一批"}
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleClear}
-            style={{
-              paddingHorizontal: 7,
-              paddingVertical: 3,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: theme.colors.border,
-              backgroundColor: theme.colors.surface1,
-            }}
-          >
-            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>清空</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Per-session auto-suggest toggle */}
+      {/* Header: title + engine badge on left, per-session auto toggle on right */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingHorizontal: 9,
-          paddingVertical: 6,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-          backgroundColor: theme.colors.surface1,
           gap: 8,
+          paddingBottom: 8,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
         }}
       >
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, flex: 1 }}>
-          {sessionDisabled ? "当前会话自动推荐：已关闭" : "当前会话自动推荐：已开启"}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+          <Text style={{ color: theme.colors.foreground, fontWeight: "700", fontSize: 13 }}>
+            ✨ Next Prompts
+          </Text>
+          {engineLabel ? (
+            <View
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 5,
+                backgroundColor: theme.colors.surface1,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                maxWidth: 130,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{ color: theme.colors.foregroundMuted, fontSize: 10 }}
+              >
+                {engineLabel}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
         <Pressable
-          accessibilityRole="button"
+          accessibilityRole="switch"
+          accessibilityLabel="当前会话自动推荐"
+          accessibilityState={{ checked: !sessionDisabled }}
           disabled={toggleSessionMutation.isPending}
           onPress={() => toggleSessionMutation.mutate(sessionDisabled)}
           style={{
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: sessionDisabled ? theme.colors.accent : theme.colors.border,
-            backgroundColor: sessionDisabled ? theme.colors.surface2 : theme.colors.surface0,
-            opacity: toggleSessionMutation.isPending ? 0.5 : 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            opacity: toggleSessionMutation.isPending ? 0.55 : 1,
           }}
         >
-          <Text style={{ color: theme.colors.foreground, fontSize: 11, fontWeight: "600" }}>
-            {toggleSessionMutation.isPending
-              ? "..."
-              : sessionDisabled
-                ? "开启本会话"
-                : "关闭本会话"}
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11 }}>
+            {sessionDisabled ? "本会话已关" : "自动推荐"}
           </Text>
+          <View
+            style={{
+              width: 32,
+              height: 18,
+              borderRadius: 9,
+              padding: 2,
+              justifyContent: "center",
+              alignItems: sessionDisabled ? "flex-start" : "flex-end",
+              backgroundColor: sessionDisabled ? theme.colors.surface2 : theme.colors.accent,
+              borderWidth: 1,
+              borderColor: sessionDisabled ? theme.colors.border : theme.colors.accent,
+            }}
+          >
+            <View
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: sessionDisabled
+                  ? theme.colors.foregroundMuted
+                  : theme.colors.accentForeground,
+              }}
+            />
+          </View>
         </Pressable>
       </View>
 
-      {/* One-Click Optimize Current Draft */}
-      <View style={{ flexDirection: "row", gap: 6 }}>
+      {/* Primary Action: Optimize Current Draft (+ Undo / Clear) */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         <Pressable
           accessibilityRole="button"
           disabled={!currentDraft || optimizeMutation.isPending}
           onPress={() => optimizeMutation.mutate()}
           style={{
             flex: 1,
-            paddingHorizontal: 10,
+            paddingHorizontal: 12,
             paddingVertical: 8,
             borderRadius: 8,
             backgroundColor: currentDraft ? theme.colors.accent : theme.colors.surface1,
             borderWidth: currentDraft ? 0 : 1,
             borderColor: theme.colors.border,
             alignItems: "center",
-            opacity: !currentDraft || optimizeMutation.isPending ? 0.55 : 1,
+            opacity: !currentDraft || optimizeMutation.isPending ? 0.6 : 1,
           }}
         >
           <Text
             style={{
               color: currentDraft ? theme.colors.accentForeground : theme.colors.foregroundMuted,
-              fontWeight: "700",
+              fontWeight: "600",
               fontSize: 12,
             }}
           >
@@ -323,7 +315,7 @@ function NextPromptsPopoverBody({
               ? "✨ 优化中..."
               : currentDraft
                 ? "✨ 一键优化当前输入"
-                : "✨ 输入内容后可一键优化 Prompt"}
+                : "输入内容后可一键优化 Prompt"}
           </Text>
         </Pressable>
 
@@ -332,7 +324,7 @@ function NextPromptsPopoverBody({
             accessibilityRole="button"
             onPress={() => void handleUndoOptimize()}
             style={{
-              paddingHorizontal: 10,
+              paddingHorizontal: 9,
               paddingVertical: 8,
               borderRadius: 8,
               borderWidth: 1,
@@ -346,76 +338,150 @@ function NextPromptsPopoverBody({
             </Text>
           </Pressable>
         ) : null}
+
+        {currentDraft ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleClear}
+            style={{
+              paddingHorizontal: 9,
+              paddingVertical: 8,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface1,
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11.5 }}>清空</Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      {suggestions.length === 0 ? (
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-          {sessionDisabled
-            ? "当前会话已关闭自动推荐（仅影响本会话，仍可手动点 ↻ 或使用优化功能）。"
-            : "No suggestions yet. Run a turn or click ↻ to generate."}
-        </Text>
-      ) : (
-        <View style={{ gap: 6 }}>
-          {suggestions.map((s) => (
-            <View
-              key={s.id}
+      {/* Suggestions Section */}
+      <View style={{ gap: 6 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "600" }}>
+            推荐追问
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={regenMutation.isPending}
+            onPress={() => regenMutation.mutate()}
+            style={{
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 5,
+              opacity: regenMutation.isPending ? 0.5 : 1,
+            }}
+          >
+            <Text style={{ color: theme.colors.foregroundMuted, fontSize: 11, fontWeight: "500" }}>
+              {regenMutation.isPending ? "生成中..." : "↻ 换一批"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {suggestions.length === 0 ? (
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 14,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface1,
+              alignItems: "center",
+            }}
+          >
+            <Text
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                borderRadius: 9,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                backgroundColor: theme.colors.surface1,
-                overflow: "hidden",
+                color: theme.colors.foregroundMuted,
+                fontSize: 11.5,
+                textAlign: "center",
+                lineHeight: 17,
               }}
             >
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handleFill(s.prompt)}
-                style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 8, gap: 2 }}
-              >
-                <Text style={{ color: theme.colors.foreground, fontSize: 12.5, fontWeight: "600" }}>
-                  {s.label}
-                </Text>
-                <Text
-                  style={{ color: theme.colors.foregroundMuted, fontSize: 11.5 }}
-                  numberOfLines={2}
-                >
-                  {s.prompt}
-                </Text>
-                {s.reason ? (
-                  <Text
-                    style={{ color: theme.colors.foregroundMuted, fontSize: 10.5, opacity: 0.78 }}
-                    numberOfLines={1}
-                  >
-                    {s.reason}
-                  </Text>
-                ) : null}
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                disabled={sendMutation.isPending}
-                onPress={() => sendMutation.mutate(s.prompt)}
+              {sessionDisabled
+                ? "当前会话已关闭自动推荐（不影响其他会话）\n仍可随时点右上角「↻ 换一批」手动生成"
+                : "暂无建议，完成一轮对话或点右上角「↻ 换一批」生成"}
+            </Text>
+          </View>
+        ) : (
+          <View style={{ gap: 6 }}>
+            {suggestions.map((s) => (
+              <View
+                key={s.id}
                 style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 10,
-                  alignSelf: "stretch",
-                  justifyContent: "center",
-                  borderLeftWidth: 1,
-                  borderLeftColor: theme.colors.border,
-                  backgroundColor: theme.colors.surface2,
-                  opacity: sendMutation.isPending ? 0.5 : 1,
+                  flexDirection: "row",
+                  alignItems: "stretch",
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface1,
+                  overflow: "hidden",
                 }}
               >
-                <Text style={{ color: theme.colors.foreground, fontSize: 12, fontWeight: "700" }}>
-                  ↵
-                </Text>
-              </Pressable>
-            </View>
-          ))}
-        </View>
-      )}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void handleFill(s.prompt)}
+                  style={{ flex: 1, paddingHorizontal: 11, paddingVertical: 9, gap: 3 }}
+                >
+                  <Text
+                    style={{ color: theme.colors.foreground, fontSize: 12.5, fontWeight: "600" }}
+                    numberOfLines={1}
+                  >
+                    {s.label}
+                  </Text>
+                  <Text
+                    style={{ color: theme.colors.foregroundMuted, fontSize: 11.5, lineHeight: 16 }}
+                    numberOfLines={2}
+                  >
+                    {s.prompt}
+                  </Text>
+                  {s.reason ? (
+                    <Text
+                      style={{
+                        color: theme.colors.foregroundMuted,
+                        fontSize: 10.5,
+                        opacity: 0.72,
+                        marginTop: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {s.reason}
+                    </Text>
+                  ) : null}
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={sendMutation.isPending}
+                  onPress={() => sendMutation.mutate(s.prompt)}
+                  style={{
+                    width: 34,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderLeftWidth: 1,
+                    borderLeftColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface2,
+                    opacity: sendMutation.isPending ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ color: theme.colors.foreground, fontSize: 13, fontWeight: "700" }}>
+                    ↵
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
